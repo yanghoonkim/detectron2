@@ -36,36 +36,21 @@ import numpy as np
 import json
 from detectron2.data.datasets import register_coco_instances
 
+from nia.utils import *
 
 logger = logging.getLogger("detectron2")
 
 BASE_PATH = Path('/home/detectron2/datasets/nia/')
-ANNO_PATH = BASE_PATH / 'annotations'
-COLL_PATH = BASE_PATH / 'collections'
+ANNO_PATH = BASE_PATH / '라벨링데이터'
+COLL_PATH = BASE_PATH / '원천데이터'
 TRAIN_LABEL_PATH = BASE_PATH / 'visible_train_label.json'
 VALID_LABEL_PATH = BASE_PATH / 'visible_valid_label.json'
 TEST_LABEL_PATH = BASE_PATH / 'visible_test_label.json'
 
-# raw data에 오류가 있기 때문에 사전에 정의해줌
-categories = [{'id': 1, 'name': 'Car', 'supercategory': 'Vehicle'},
- {'id': 2, 'name': 'Two-wheel Vehicle', 'supercategory': 'Vehicle'},
- {'id': 3, 'name': 'Personal Mobility', 'supercategory': 'Vehicle'},
- {'id': 4, 'name': 'TruckBus', 'supercategory': 'Vehicle'},
- {'id': 5, 'name': 'Kid student', 'supercategory': 'Pedestrian'},
- {'id': 6, 'name': 'Adult', 'supercategory': 'Pedestrian'},
- {'id': 7, 'name': 'Traffic Sign', 'supercategory': 'Outdoor'},
- {'id': 8, 'name': 'Traffic Light', 'supercategory': 'Outdoor'},
- {'id': 9, 'name': 'Speed bump', 'supercategory': 'Outdoor'},
- {'id': 10, 'name': 'Parking space', 'supercategory': 'Outdoor'},
- {'id': 11, 'name': 'Crosswalk', 'supercategory': 'Outdoor'}]
 
-
-# 가시광 데이터 필터링
-def is_visible_data(item):
-    cond = item.match('image_B/*.png*') or item.match('image_F/*.png*') or item.match('image_L/*.png*') or item.match('image_R/*.png*')
-    return cond
 
 def split_data():
+
     if (not TRAIN_LABEL_PATH.exists()) or (not VALID_LABEL_PATH.exists()) or (not TEST_LABEL_PATH.exists()):
         print('[DATA SPLIT] Splitting data...')
         img_paths = list(COLL_PATH.rglob('*.png'))
@@ -84,7 +69,7 @@ def split_data():
         df_visible_anno = pd.DataFrame({'filename': visible_anno_names_wo_json, 'annopath': visible_anno_paths}).set_index('filename')
 
         df_visible = pd.concat([df_visible_img, df_visible_anno], axis=1).dropna(how='any')
-        df_visible = df_visible.sample(frac=1) # random shuffle
+        df_visible = df_visible.sample(frac=1, random_state=0) # random shuffle
 
         # visible 데이터 오류 검출
         # 가시광 데이터 annotations에서 segmentation이 None으로 표기된 경우들을 제외하기
@@ -255,21 +240,16 @@ def do_train(args, cfg):
 
 
 def main(args):
-    split_data()
-
-    register_coco_instances('train_data', {}, TRAIN_LABEL_PATH, COLL_PATH)
-    register_coco_instances('test_data', {}, VALID_LABEL_PATH, COLL_PATH)
-
+    get_valid_data()
+    register_coco_instances('nia_val', {}, VALID_LABEL_PATH, COLL_PATH)
     cfg = LazyConfig.load(args.config_file)
     cfg.dataloader.train.mapper['instance_mask_format'] = 'bitmask'
     cfg.dataloader.test.mapper['instance_mask_format'] = 'bitmask'
+    cfg.dataloader.test.dataset.names = 'nia_val'
 
-    cfg.train.init_checkpoint = '/home/detectron2/output/model_final_61ccd1.pkl'
-    #cfg.train.eval_period = 50
-
+    cfg.train.init_checkpoint = '/home/detectron2/nia/model_final_61ccd1.pkl'
+    cfg.train.eval_period = 20
     cfg.dataloader.train.total_batch_size = 1
-    cfg.dataloader.train.dataset.names = 'train_data'
-    cfg.dataloader.test.dataset.names = 'test_data'
     cfg.model.roi_heads.num_classes = 11
     cfg.optimizer.lr = 1e-5
     cfg.train.output_dir = './output/segmentation'

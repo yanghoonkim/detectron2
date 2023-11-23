@@ -10,8 +10,19 @@ from typing import Callable, Union
 import torch
 import torch.utils.data as data
 from torch.utils.data.sampler import Sampler
+import json
 
 from detectron2.utils.serialize import PicklableWrapper
+
+from nia.nia_dataset_reader import (
+    NiaDataPathExtractor,
+    DataFrameSplitter,
+    NiaDataPathProvider,
+)
+
+from nia.poly2bitmask import build_segmentation_from_multipoly
+from detectron2.structures import BoxMode
+
 
 __all__ = ["MapDataset", "DatasetFromList", "AspectRatioGroupedDataset", "ToIterableDataset"]
 
@@ -337,3 +348,94 @@ class AspectRatioGroupedDataset(data.IterableDataset):
                 # guaranteed to execute
                 del bucket[:]
                 yield data
+
+
+class DatasetFromPathList(data.Dataset):
+    """
+    Wrap a list to a torch Dataset. It produces elements of the list as data.
+    """
+
+    def __init__(
+        self,
+        lst: str,
+        copy: bool = True,
+        serialize: Union[bool, Callable] = True,
+    ):
+        """
+        Args:
+            lst (list): a list which contains elements to produce.
+            copy (bool): whether to deepcopy the element when producing it,
+                so that the result can be modified in place without affecting the
+                source in the list.
+            serialize (bool or callable): whether to serialize the stroage to other
+                backend. If `True`, the default serialize method will be used, if given
+                a callable, the callable will be used as serialize method.
+        """
+        with open('/home/detectron2/nia/img_w_bug.pkl', 'rb') as f:
+            img_w_bug = pickle.load(f)
+
+        path_provider = NiaDataPathProvider(
+            reader=NiaDataPathExtractor(dataset_dir="/home/detectron2/datasets/nia/",
+                                        exclude_filenames=img_w_bug),
+            splitter=DataFrameSplitter(
+                groups=["channel", "collector", "sensor", "code_1", "code_2", "timeslot", "weather"],
+                splits=["train", "valid", "test"],
+                ratios=[8, 1, 1],
+                seed=231111,
+            ),
+            channels=["image_B", "image_F", "image_L", "image_R"],
+        )
+
+        if lst == 'nia_train':
+            path_pairs = path_provider.get_split_data_list("train")
+        else:
+            path_pairs = path_provider.get_split_data_list('valid')
+
+
+        self._lst = path_pairs
+        self._copy = copy
+        if not isinstance(serialize, (bool, Callable)):
+            raise TypeError(f"Unsupported type for argument `serailzie`: {serialize}")
+        self._serialize = serialize is not False
+
+        if self._serialize:
+            serialize_method = (
+                serialize
+                if isinstance(serialize, Callable)
+                else _DEFAULT_DATASET_FROM_LIST_SERIALIZE_METHOD
+            )
+            logger.info(f"Serializing the dataset using: {serialize_method}")
+            self._lst = serialize_method(self._lst)
+
+    def __len__(self):
+        return len(self._lst)
+
+    def __getitem__(self, idx):
+        with open(self._lst[idx][1]) as f:
+            raw_item = json.load(f)
+        item = dict()
+        item['file_name'] = self._lst[idx][0]
+        item['height'] = raw_item['images'][0]['height']
+        item['width'] = raw_item['images'][0]['width']
+        item['image_id'] = raw_item['images'][0]['id']
+        item['annotations'] = process_anno4nia(raw_item['annotations'])
+
+        if self._copy and not self._serialize:
+            return copy.deepcopy(item)
+        else:
+            return item
+
+id_to_contiguous_id = {3:0, 2:1, 99:2, 8:3, 97:4, 98:5, 12:6, 10:7, 52:8, 51:9, 100:10}
+
+def process_anno4nia(annotations):
+    processed_annos = list()
+    for anno in annotations:
+        anno_dict = dict()
+        anno_dict['iscrowd'] = anno['iscrowd']
+        anno_dict['bbox'] = anno['bbox']
+        anno_dict['category_id'] = id_to_contiguous_id[anno['category_id']]
+        anno_dict['segmentation'] = build_segmentation_from_multipoly(anno['segmentation'])
+        anno_dict['bbox_mode'] = BoxMode.XYWH_ABS
+        processed_annos.append(anno_dict)
+    
+    return processed_annos
