@@ -139,7 +139,7 @@ def main(args):
     cfg.optimizer.lr = 1e-5
     cfg.train.output_dir = './output/segmentation'
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
-    import pdb;pdb.set_trace()
+
     default_setup(cfg, args)
     if args.eval_only:
         model = instantiate(cfg.model)
