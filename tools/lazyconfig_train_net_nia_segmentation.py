@@ -127,7 +127,7 @@ def main(args):
     cfg.dataloader.train.total_batch_size = 1
     cfg.model.roi_heads.num_classes = 11
     cfg.optimizer.lr = 1e-5
-    cfg.train.output_dir = './output/segmentation'
+    cfg.train.output_dir = './output'
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
     default_setup(cfg, args)
 
