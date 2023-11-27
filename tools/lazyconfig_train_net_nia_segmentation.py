@@ -115,16 +115,6 @@ def do_train(args, cfg):
 
 def main(args):
     cfg = LazyConfig.load(args.config_file)
-
-    if cfg.dataloader.test.dataset.names == 'nia_val':
-        get_evaluation_data('valid')
-        register_coco_instances('nia_val', {}, VALID_LABEL_PATH, COLL_PATH)
-    elif cfg.dataloader.test.dataset.names == 'nia_test':
-        get_evaluation_data('test')
-        register_coco_instances('nia_test', {}, TEST_LABEL_PATH, COLL_PATH)
-    else:
-        raise Exception('cfg.dataloader.test.dataset.names should be one of ["nia_val", "nia_test"]')  
-    
     cfg.dataloader.train.mapper['instance_mask_format'] = 'bitmask'
     cfg.dataloader.test.mapper['instance_mask_format'] = 'bitmask'
     #cfg.dataloader.test.dataset.names = 'nia_val'
@@ -139,8 +129,17 @@ def main(args):
     cfg.optimizer.lr = 1e-5
     cfg.train.output_dir = './output/segmentation'
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
-
     default_setup(cfg, args)
+
+    if cfg.dataloader.test.dataset.names == 'nia_val':
+        get_evaluation_data('valid')
+        register_coco_instances('nia_val', {}, VALID_LABEL_PATH, COLL_PATH)
+    elif cfg.dataloader.test.dataset.names == 'nia_test':
+        get_evaluation_data('test')
+        register_coco_instances('nia_test', {}, TEST_LABEL_PATH, COLL_PATH)
+    else:
+        raise Exception('cfg.dataloader.test.dataset.names should be one of ["nia_val", "nia_test"]')  
+
     if args.eval_only:
         model = instantiate(cfg.model)
         model.to(cfg.train.device)
