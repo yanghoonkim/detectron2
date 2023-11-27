@@ -5,6 +5,7 @@ from detectron2.structures import BoxMode
 import pandas as pd
 import json
 import numpy as np
+import math
 
 from nia.nia_dataset_reader import (
     NiaDataPathExtractor,
@@ -93,6 +94,7 @@ def process_anno4nia(annotations):
         anno_dict['category_id'] = id_to_contiguous_id[anno['category_id']]
         anno_dict['segmentation'] = build_segmentation_from_multipoly(anno['segmentation'])
         anno_dict['bbox_mode'] = BoxMode.XYWH_ABS
+        anno_dict['area'] = anno['area']
         processed_annos.append(anno_dict)
     
     return processed_annos
@@ -158,9 +160,14 @@ def make_dict_mp(df):
     return dict_
 
 
-def get_valid_data():
-    if not VALID_LABEL_PATH.exists():
-        print('Get Valid Json File...')
+def get_evaluation_data(split_name='valid'):
+    if split_name == 'valid':
+        EVAL_LABEL_PATH = VALID_LABEL_PATH
+    else:
+        EVAL_LABEL_PATH = TEST_LABEL_PATH
+
+    if not EVAL_LABEL_PATH.exists():
+        print('Get Json file for evaluation...')
 
         with open('/home/detectron2/nia/img_w_bug.pkl', 'rb') as f:
             img_w_bug = pickle.load(f)
@@ -172,22 +179,141 @@ def get_valid_data():
                 groups=["channel", "collector", "sensor", "code_1", "code_2", "timeslot", "weather"],
                 splits=["train", "valid", "test"],
                 ratios=[8, 1, 1],
+                #splits=['train', 'valid'],
+                #ratios=[79,1],
                 seed=231111,
             ),
             channels=["image_B", "image_F", "image_L", "image_R"],
         )
 
-        valid_path_pairs = path_provider.get_split_data_list('valid')
-        df_visible_valid = to_frame(valid_path_pairs)
-        valid_dict = make_dict_mp(df_visible_valid)
+        path_pairs = path_provider.get_split_data_list(split_name)
+        df_visible_eval = to_frame(path_pairs)
+        eval_dict = make_dict_mp(df_visible_eval)
 
         # annotation id 중복 이슈 해결
         anno_id = 0
+        for idx, item in enumerate(eval_dict['annotations']):
+            eval_dict['annotations'][idx]['id'] = anno_id
+            anno_id += 1
+        
+        with EVAL_LABEL_PATH.open('w') as f:
+            json.dump(eval_dict, f)
+    else:
+        print('Loading Json file...')
+
+
+def split_data():
+
+    if (not TRAIN_LABEL_PATH.exists()) or (not VALID_LABEL_PATH.exists()) or (not TEST_LABEL_PATH.exists()):
+        print('[DATA SPLIT] Splitting data...')
+        img_paths = list(COLL_PATH.rglob('*.png'))
+        anno_paths = list(ANNO_PATH.rglob('*.json'))
+
+        # 이미지와 annotation이 동시에 존재하는 파일만 필터링
+        visible_anno_paths = list(filter(is_visible_data, anno_paths))
+        visible_anno_paths = list(filter(lambda x: '._' not in x.as_posix(), visible_anno_paths))
+        visible_anno_names = [item.name for item in visible_anno_paths]
+        visible_anno_names_wo_json = [item.rstrip('.json') for item in visible_anno_names]
+
+        visible_img_paths = list(filter(is_visible_data, img_paths))
+        visible_img_names = [item.name for item in visible_img_paths]
+
+        df_visible_img = pd.DataFrame({'filename': visible_img_names, 'imgpath': visible_img_paths}).set_index('filename')
+        df_visible_anno = pd.DataFrame({'filename': visible_anno_names_wo_json, 'annopath': visible_anno_paths}).set_index('filename')
+
+        df_visible = pd.concat([df_visible_img, df_visible_anno], axis=1).dropna(how='any')
+        df_visible = df_visible.sample(frac=1, random_state=0) # random shuffle
+
+        # visible 데이터 오류 검출
+        # 가시광 데이터 annotations에서 segmentation이 None으로 표기된 경우들을 제외하기
+        # json 파일에서 필요한 정보만 추출: 'images', 'annotations'
+        anno_images = list()
+        anno_annotations = list()
+
+        for item in df_visible.annopath:
+            none_flag = False
+            item_json = json.load(item.open())
+            for anno in item_json['annotations']:
+                if anno['segmentation'] is None:
+                    none_flag = True
+                    break
+            if not none_flag:
+                anno_images.append(item_json['images'])
+                anno_annotations.append(item_json['annotations'])
+
+        # data split
+        ratio = [8, 1, 1] # train / valid / test
+        ratio = [item / sum(ratio) for item in ratio]    
+
+        total_len = len(anno_images)
+        train_len = math.floor(total_len * ratio[0])
+        valid_len = train_len + math.floor(total_len * ratio[1])
+
+        train_dict = dict()
+        valid_dict = dict()
+        test_dict = dict()
+
+        train_dict['categories'] = categories
+        train_dict['images'] = anno_images[:train_len]
+        train_dict['images'] = np.concatenate(train_dict['images']).tolist() # [[1],[2],[3]] -> [1,2,3]
+        train_dict['annotations'] = anno_annotations[:train_len] 
+        train_dict['annotations'] = np.concatenate(train_dict['annotations']).tolist() # [[1,2],[3,4],[5,6]] -> [1,2,3,4,5,6]
+
+        valid_dict['categories'] = categories
+        valid_dict['images'] = anno_images[train_len:valid_len]
+        valid_dict['images'] = np.concatenate(valid_dict['images']).tolist()
+        valid_dict['annotations'] = anno_annotations[train_len:valid_len]
+        valid_dict['annotations'] = np.concatenate(valid_dict['annotations']).tolist()
+
+        test_dict['categories'] = categories
+        test_dict['images'] = anno_images[valid_len:]
+        test_dict['images'] = np.concatenate(test_dict['images']).tolist()
+        test_dict['annotations'] = anno_annotations[valid_len:]
+        test_dict['annotations'] = np.concatenate(test_dict['annotations']).tolist()
+
+
+        # annotation id 중복 이슈 해결
+        #  + category_id가 잘못 된 경우 수정 (0 -> 1)
+        anno_id = 0
+        for idx, item in enumerate(train_dict['annotations']):
+            train_dict['annotations'][idx]['id'] = anno_id
+            train_dict['annotations'][idx]['category_id'] = 1 if item['category_id'] == 0 else item['category_id']
+            anno_id += 1
         for idx, item in enumerate(valid_dict['annotations']):
             valid_dict['annotations'][idx]['id'] = anno_id
+            valid_dict['annotations'][idx]['category_id'] = 1 if item['category_id'] == 0 else item['category_id']
             anno_id += 1
+        for idx, item in enumerate(test_dict['annotations']):
+            test_dict['annotations'][idx]['id'] = anno_id
+            test_dict['annotations'][idx]['category_id'] = 1 if item['category_id'] == 0 else item['category_id']
+            anno_id += 1
+
+
+
+        # folder hierarchy가 다를수도 있기 때문에 실제 file_name으로 바꿔주기
+        for idx, item in enumerate(train_dict['images']):
+            file_name_wo_dir = item['file_name'].split('/')[-1]
+            real_file_name = df_visible.loc[file_name_wo_dir, 'imgpath'].relative_to('/home/detectron2/datasets/nia/collections/').as_posix()
+            train_dict['images'][idx]['file_name'] = real_file_name
+
+        for idx, item in enumerate(valid_dict['images']):
+            file_name_wo_dir = item['file_name'].split('/')[-1]
+            real_file_name = df_visible.loc[file_name_wo_dir, 'imgpath'].relative_to('/home/detectron2/datasets/nia/collections/').as_posix()
+            valid_dict['images'][idx]['file_name'] = real_file_name
+            
+
+        for idx, item in enumerate(test_dict['images']):
+            file_name_wo_dir = item['file_name'].split('/')[-1]
+            real_file_name = df_visible.loc[file_name_wo_dir, 'imgpath'].relative_to('/home/detectron2/datasets/nia/collections/').as_posix()
+            test_dict['images'][idx]['file_name'] = real_file_name
+        
+        with TRAIN_LABEL_PATH.open('w') as f:
+            json.dump(train_dict, f)
         
         with VALID_LABEL_PATH.open('w') as f:
             json.dump(valid_dict, f)
+
+        with TEST_LABEL_PATH.open('w') as f:
+            json.dump(test_dict, f) 
     else:
-        print('Load Valid Json File')
+        print('[DATA SPLIT] Load existing files...')
