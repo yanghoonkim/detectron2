@@ -20,3 +20,7 @@ dataloader.train.mapper.recompute_boxes = True
 dataloader.test.mapper.augmentations = [
     L(T.ResizeShortestEdge)(short_edge_length=image_size, max_size=image_size),
 ]
+
+dataloader.train.mapper['instance_mask_format'] = 'bitmask'
+dataloader.test.mapper['instance_mask_format'] = 'bitmask'
+dataloader.train.total_batch_size = 1

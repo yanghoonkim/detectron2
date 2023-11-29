@@ -115,30 +115,11 @@ def do_train(args, cfg):
 
 def main(args):
     cfg = LazyConfig.load(args.config_file)
-    cfg.dataloader.train.mapper['instance_mask_format'] = 'bitmask'
-    cfg.dataloader.test.mapper['instance_mask_format'] = 'bitmask'
-    #cfg.dataloader.test.dataset.names = 'nia_val'
-
-    cfg.train.init_checkpoint = '/home/detectron2/nia/model_final_61ccd1.pkl'
-    cfg.train.max_iter = 720000
-    cfg.train.eval_period = 20000
-    #cfg.train.init_checkpoint = '/home/detectron2/output/segmentation_unt1018/model_final.pth'
-    #cfg.train.eval_period = 20
-    cfg.dataloader.train.total_batch_size = 1
-    cfg.model.roi_heads.num_classes = 11
-    cfg.optimizer.lr = 1e-5
-    cfg.train.output_dir = './output'
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
     default_setup(cfg, args)
-
-    if cfg.dataloader.test.dataset.names == 'nia_val':
-        get_evaluation_data('valid')
-        register_coco_instances('nia_val', {}, VALID_LABEL_PATH, COLL_PATH)
-    elif cfg.dataloader.test.dataset.names == 'nia_test':
-        get_evaluation_data('test')
-        register_coco_instances('nia_test', {}, TEST_LABEL_PATH, COLL_PATH)
-    else:
-        raise Exception('cfg.dataloader.test.dataset.names should be one of ["nia_val", "nia_test"]')  
+    get_essential_data()
+    register_coco_instances('nia_val', {}, VALID_LABEL_PATH, IMG_PATH)
+    register_coco_instances('nia_test', {}, TEST_LABEL_PATH, IMG_PATH)
 
     if args.eval_only:
         model = instantiate(cfg.model)

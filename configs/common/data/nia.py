@@ -8,12 +8,14 @@ from detectron2.data import (
     build_detection_nia_train_loader,
     get_detection_dataset_dicts,
 )
-from detectron2.evaluation import COCOEvaluator, NIAEvaluator
+from detectron2.evaluation import COCOEvaluator
+
+from nia.utils import TRAIN_PAIRS_LIST
 
 dataloader = OmegaConf.create()
 
 dataloader.train = L(build_detection_nia_train_loader)(
-    dataset='nia_train',
+    datafile=TRAIN_PAIRS_LIST.as_posix(),
     mapper=L(DatasetMapper)(
         is_train=True,
         augmentations=[
@@ -30,22 +32,6 @@ dataloader.train = L(build_detection_nia_train_loader)(
     total_batch_size=16,
     num_workers=4,
 )
-
-'''
-dataloader.test = L(build_detection_test_loader)(
-    dataset='nia_valid',
-    mapper=L(DatasetMapper)(
-        is_train=False,
-        augmentations=[
-            L(T.ResizeShortestEdge)(short_edge_length=800, max_size=1333),
-        ],
-        image_format="${...train.mapper.image_format}",
-    ),
-    num_workers=4,
-)
-
-dataloader.evaluator = L(NIAEvaluator)()
-'''
 
 dataloader.test = L(build_detection_test_loader)(
     dataset=L(get_detection_dataset_dicts)(names="nia_val", filter_empty=False),
