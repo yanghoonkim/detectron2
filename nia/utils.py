@@ -21,7 +21,7 @@ IMG_PATH = BASE_PATH / '1.원천데이터'
 TRAIN_PAIRS_LIST = BASE_PATH / 'visible_train_pairs.pkl'
 VALID_LABEL_PATH = BASE_PATH / 'visible_valid_label.json'
 TEST_LABEL_PATH = BASE_PATH / 'visible_test_label.json'
-BUG_LIST = BASE_PATH / 'img_w_bug.pkl'
+BUG_LIST = Path('/home/detectron2/nia/img_w_bug.pkl')
 
 
 # categories 정의
@@ -169,19 +169,13 @@ def get_essential_data():
             img_w_bug = pickle.load(f)
 
         path_provider = NiaDataPathProvider(
-            reader=NiaDataPathExtractor(dataset_dir=BASE_PATH.as_posix(),
-                                        exclude_filenames=img_w_bug),
-            splitter=DataFrameSplitter(
-                groups=["channel", "collector", "sensor", "code_1", "code_2", "timeslot", "weather"],
-                splits=["train", "valid", "test"],
-                ratios=[8, 1, 1],
-                seed=231111,
-            ),
-            channels=["image_B", "image_F", "image_L", "image_R"],
+            reader=NiaDataPathExtractor(dataset_dir=BASE_PATH.as_posix()),
+            splitter=DataFrameSplitter(),
+            exclude_filenames=img_w_bug,
         )
-        train_path_pairs = path_provider.get_split_data_list('train')
-        valid_path_pairs = path_provider.get_split_data_list('valid')
-        test_path_pairs = path_provider.get_split_data_list('test')
+        train_path_pairs = path_provider.get_split_data_list(channels=["image_B", "image_F", "image_L", "image_R"], splits="train")
+        valid_path_pairs = path_provider.get_split_data_list(channels=["image_B", "image_F", "image_L", "image_R"], splits="valid")
+        test_path_pairs = path_provider.get_split_data_list(channels=["image_B", "image_F", "image_L", "image_R"], splits="test")
 
         df_visible_valid = to_frame(valid_path_pairs)
         valid_dict = make_dict_mp(df_visible_valid)
