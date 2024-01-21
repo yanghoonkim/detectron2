@@ -67,9 +67,9 @@ def do_train(args, cfg):
 
     cfg.optimizer.params.model = model
     optim = instantiate(cfg.optimizer)
-    cfg.dataloader.train.dataset.names = 'coco_2017_val'
-    cfg.train.eval_period = 10
+
     train_loader = instantiate(cfg.dataloader.train)
+
     model = create_ddp_model(model, **cfg.train.ddp)
     trainer = (AMPTrainer if cfg.train.amp.enabled else SimpleTrainer)(model, train_loader, optim)
     checkpointer = DetectionCheckpointer(
@@ -106,7 +106,6 @@ def do_train(args, cfg):
 
 def main(args):
     cfg = LazyConfig.load(args.config_file)
-    cfg.train.init_checkpoint = '/home/detectron2/nia/model_final_61ccd1.pkl'
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
     default_setup(cfg, args)
 
