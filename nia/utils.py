@@ -170,7 +170,6 @@ def get_essential_data():
 
         path_provider = NiaDataPathProvider(
             reader=NiaDataPathExtractor(dataset_dir=BASE_PATH.as_posix()),
-            splitter=DataFrameSplitter(),
             exclude_filenames=img_w_bug,
         )
         train_path_pairs = path_provider.get_split_data_list(channels=["image_B", "image_F", "image_L", "image_R"], splits="train")
