@@ -15,13 +15,13 @@ from nia.nia_dataset_reader import (
 
 from nia.poly2bitmask import build_segmentation_from_multipoly
 
-BASE_PATH = Path('/home/detectron2/datasets/nia/')
+BASE_PATH = Path('/root/detectron2/datasets/nia/')
 ANNO_PATH = BASE_PATH / '2.라벨링데이터'
 IMG_PATH = BASE_PATH / '1.원천데이터'
 TRAIN_PAIRS_LIST = BASE_PATH / 'visible_train_pairs.pkl'
 VALID_LABEL_PATH = BASE_PATH / 'visible_valid_label.json'
 TEST_LABEL_PATH = BASE_PATH / 'visible_test_label.json'
-BUG_LIST = Path('/home/detectron2/nia/img_w_bug.pkl')
+BUG_LIST = Path('/root/detectron2/nia/img_w_bug.pkl')
 
 
 # categories 정의

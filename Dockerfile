@@ -10,11 +10,11 @@ RUN pip install opencv-python timm shapely~=1.0 pandas notebook==6.4.8 traitlets
 
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-WORKDIR /home
+WORKDIR /root
 
 RUN git clone https://github.com/yanghoonkim/detectron2.git
 
-WORKDIR /home/detectron2
+WORKDIR /root/detectron2
 
 RUN git checkout nia
 
