@@ -118,8 +118,8 @@ def main(args):
     cfg = LazyConfig.apply_overrides(cfg, args.opts)
     default_setup(cfg, args)
     get_essential_data()
-    register_coco_instances('nia_val', {}, VALID_LABEL_PATH, IMG_PATH)
-    register_coco_instances('nia_test', {}, TEST_LABEL_PATH, IMG_PATH)
+    register_coco_instances('nia_val', {}, VALID_LABEL_PATH, '~/')
+    register_coco_instances('nia_test', {}, TEST_LABEL_PATH, '~/')
 
     if args.eval_only:
         model = instantiate(cfg.model)

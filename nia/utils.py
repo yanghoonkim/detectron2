@@ -16,8 +16,6 @@ from nia.nia_dataset_reader import (
 from nia.poly2bitmask import build_segmentation_from_multipoly
 
 BASE_PATH = Path('/root/detectron2/datasets/nia/')
-ANNO_PATH = BASE_PATH / '2.라벨링데이터'
-IMG_PATH = BASE_PATH / '1.원천데이터'
 TRAIN_PAIRS_LIST = BASE_PATH / 'visible_train_pairs.pkl'
 VALID_LABEL_PATH = BASE_PATH / 'visible_valid_label.json'
 TEST_LABEL_PATH = BASE_PATH / 'visible_test_label.json'
@@ -118,7 +116,7 @@ def make_dict(df):
                 break
         if not issue_flag:
             anno_images.extend(item_json['images'])
-            anno_images[-1]['file_name'] = Path(filename).relative_to(IMG_PATH.as_posix()).as_posix()
+            anno_images[-1]['file_name'] = Path(filename).as_posix()
             processed_annos = process_anno4nia(item_json['annotations'])
             anno_annotations.extend(processed_annos)
     
@@ -137,7 +135,7 @@ def process_single_file(annopath):
             break    
     if not issue_flag:
         anno_img = item_json['images'][0]
-        anno_img['file_name'] = Path(annopath).relative_to(ANNO_PATH.as_posix()).as_posix().rstrip('.json')
+        anno_img['file_name'] = Path(annopath).as_posix().rstrip('.json').replace('2.라벨링데이터', '1.원천데이터')
         processed_annos = process_anno4nia(item_json['annotations'])
         
         return [[anno_img], processed_annos]
